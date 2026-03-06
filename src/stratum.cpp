@@ -126,37 +126,27 @@ static std::vector<std::string> json_parse_params(const std::string& params) {
 // We compute: target[32] = (2^224 - 1) / difficulty, stored as little-endian bytes
 static void difficulty_to_target(double difficulty, uint8_t target[32]) {
     // maxTarget = 2^224 - 1 (28 bytes of 0xFF, 4 bytes of 0x00 at the top)
-    // As a double: roughly 2^224
     // target = maxTarget / difficulty
-    //
-    // We'll compute this as: target_val = 2^224 / difficulty
-    // Then convert to 32-byte little-endian
+    // Output: 32 bytes in LITTLE-ENDIAN format (byte[0] = LSB, byte[31] = MSB)
+    // This matches the byte order used by the DomainHash / PoW comparison
 
     if (difficulty <= 0.0) {
         memset(target, 0xFF, 32);
         return;
     }
 
-    // 2^224 as long double for more precision
+    // 2^224 as long double for precision
     long double max_target_f = powl(2.0L, 224.0L);
     long double target_f = max_target_f / (long double)difficulty;
 
-    // Convert to bytes (big-endian first, then reverse to little-endian)
-    // We'll extract byte-by-byte by dividing by 256
-    uint8_t be_bytes[32];
-    memset(be_bytes, 0, 32);
-
+    // Extract bytes in LITTLE-ENDIAN order (LSB first)
+    memset(target, 0, 32);
     long double remaining = target_f;
-    for (int i = 31; i >= 0; i--) {
+    for (int i = 0; i < 32; i++) {
         long double byte_val = fmodl(remaining, 256.0L);
-        be_bytes[i] = (uint8_t)byte_val;
+        target[i] = (uint8_t)byte_val;
         remaining = floorl(remaining / 256.0L);
     }
-
-    // The bytes are in big-endian, copy to target (which we store as-is for comparison)
-    // Our hash comparison does big-endian comparison from byte[31] down to byte[0]
-    // So store as big-endian directly
-    memcpy(target, be_bytes, 32);
 }
 
 // ============================================================================
