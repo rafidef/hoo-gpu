@@ -454,12 +454,19 @@ void StratumClient::parse_notify(const std::string& msg) {
         std::lock_guard<std::mutex> lock(job_mutex_);
         // Preserve the target from set_difficulty
         memcpy(job.target, current_job_.target, DOMAIN_HASH_SIZE);
-        current_job_ = job;
-    }
 
-    printf("[Stratum] New job: %s (ts=%lld, header=%s)\n",
-           job.job_id.c_str(), (long long)job.timestamp,
-           encode_hex(job.prev_header, 8).c_str());
+        // Only log when header actually changes (new block)
+        bool header_changed = !current_job_.valid ||
+            memcmp(current_job_.prev_header, job.prev_header, DOMAIN_HASH_SIZE) != 0;
+
+        current_job_ = job;
+
+        if (header_changed) {
+            printf("[Stratum] New block: job=%s (ts=%lld, header=%s)\n",
+                   job.job_id.c_str(), (long long)job.timestamp,
+                   encode_hex(job.prev_header, 8).c_str());
+        }
+    }
 
     if (job_callback_) {
         job_callback_(job);

@@ -298,6 +298,9 @@ static void run_mining(const MinerConfig& config) {
     auto mining_start = std::chrono::steady_clock::now();
     auto last_report = mining_start;
     std::string current_job_id;
+    uint8_t current_header[DOMAIN_HASH_SIZE];
+    memset(current_header, 0, DOMAIN_HASH_SIZE);
+    int64_t current_timestamp = 0;
 
     printf("[Miner] Mining started!\n\n");
 
@@ -322,16 +325,31 @@ static void run_mining(const MinerConfig& config) {
         }
 
         if (new_job) {
-            // Generate new matrix and upload to GPU
-            host_generate_hoohash_matrix(job.prev_header, h_mat);
-            CUDA_CHECK(cudaMemcpy(d_mat, h_mat, 64 * 64 * sizeof(double),
-                                   cudaMemcpyHostToDevice));
-            CUDA_CHECK(cudaMemcpy(d_prev_header, job.prev_header,
-                                   DOMAIN_HASH_SIZE, cudaMemcpyHostToDevice));
+            // Always update the job ID for share submission
+            current_job_id = job.job_id;
+
+            // Only regenerate matrix if the header hash actually changed
+            bool header_changed = (memcmp(current_header, job.prev_header, DOMAIN_HASH_SIZE) != 0);
+            bool timestamp_changed = (current_timestamp != job.timestamp);
+
+            if (header_changed) {
+                // New block — regenerate matrix and reset nonce
+                memcpy(current_header, job.prev_header, DOMAIN_HASH_SIZE);
+                current_timestamp = job.timestamp;
+                host_generate_hoohash_matrix(job.prev_header, h_mat);
+                CUDA_CHECK(cudaMemcpy(d_mat, h_mat, 64 * 64 * sizeof(double),
+                                       cudaMemcpyHostToDevice));
+                CUDA_CHECK(cudaMemcpy(d_prev_header, job.prev_header,
+                                       DOMAIN_HASH_SIZE, cudaMemcpyHostToDevice));
+                nonce_counter = 0;
+                printf("[Miner] New block header — matrix regenerated\n");
+            } else if (timestamp_changed) {
+                current_timestamp = job.timestamp;
+            }
+
+            // Always update target (difficulty may change)
             CUDA_CHECK(cudaMemcpy(d_target, job.target, DOMAIN_HASH_SIZE,
                                    cudaMemcpyHostToDevice));
-            current_job_id = job.job_id;
-            nonce_counter = 0;
         }
 
         // Reset result counter
@@ -443,7 +461,7 @@ int main(int argc, char** argv) {
     config.worker = "h100";
     config.password = "x";
     config.device_id = 0;
-    config.intensity = 22;
+    config.intensity = 24;
     bool benchmark = false;
 
     for (int i = 1; i < argc; i++) {
