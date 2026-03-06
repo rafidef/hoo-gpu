@@ -7,8 +7,8 @@ set(CMAKE_CUDA_STANDARD 17)
 # H100 = sm_90 (Hopper architecture)
 set(CMAKE_CUDA_ARCHITECTURES 90)
 
-# CUDA flags for maximum performance
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --use_fast_math -O3 -lineinfo")
+# CUDA flags — NO --use_fast_math! HooHash requires exact FP64 precision
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 -lineinfo")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 # Enable separable compilation so device functions work across .cu files
